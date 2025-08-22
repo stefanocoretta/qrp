@@ -133,13 +133,17 @@ function makeChoice(index,type) {
 }
 
 function recomputePointsAndDisplay(){
-  IPpoints=0; CPpoints=0;
-  choices.forEach((c,i)=>{
+  IPpoints = 0;
+  CPpoints = 0;
+  choices.forEach(c=>{
     if(c==="IP") IPpoints++;
     else if(c==="CP") CPpoints++;
-    else if(c==="Drop") CPpoints=Math.max(0,CPpoints-1);
+    else if(c==="Drop") CPpoints--; // Deduct 1 CP for Drop
   });
-  document.getElementById('pointsOutput').innerHTML=`<strong>Current Points:</strong><br>IP: ${IPpoints}<br>CP: ${CPpoints}`;
+
+  // No lower bound: CP can go negative now
+  document.getElementById('pointsOutput').innerHTML = 
+    `<strong>Current Points:</strong><br>IP: ${IPpoints}<br>CP: ${CPpoints}`;
 }
 
 document.getElementById('phase1Btn').addEventListener('click',()=>{
@@ -148,6 +152,7 @@ document.getElementById('phase1Btn').addEventListener('click',()=>{
   choices=[null,null,null];
   dropIndex=null;
   renderPhase1Results();
+  recomputePointsAndDisplay();
   document.getElementById('submitChoices').style.display='inline-block';
 });
 
