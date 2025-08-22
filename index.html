@@ -140,8 +140,6 @@ function recomputePointsAndDisplay(){
     else if(c==="CP") CPpoints++;
     else if(c==="Drop") CPpoints--; // Deduct 1 CP for Drop
   });
-
-  // No lower bound: CP can go negative now
   document.getElementById('pointsOutput').innerHTML = 
     `<strong>Current Points:</strong><br>IP: ${IPpoints}<br>CP: ${CPpoints}`;
 }
@@ -154,6 +152,7 @@ document.getElementById('phase1Btn').addEventListener('click',()=>{
   renderPhase1Results();
   recomputePointsAndDisplay();
   document.getElementById('submitChoices').style.display='inline-block';
+  document.getElementById('phase1Btn').style.display='none'; // hide after results generated
 });
 
 document.getElementById('phase1Output').addEventListener('click',e=>{
@@ -188,6 +187,7 @@ document.getElementById('phase2Btn').addEventListener('click',()=>{
     document.getElementById('phase2').style.display='none';
     document.getElementById('phase1').style.display='block';
     document.getElementById('submitChoices').style.display='inline-block';
+    document.getElementById('phase1Btn').style.display='none'; // hide "Get your results" button during revise
     renderPhase1Results();
     recomputePointsAndDisplay();
   } else {
