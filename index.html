@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publish or Perish!</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  button { padding: 10px 20px; margin: 10px 0; font-size: 16px; }
+  .output { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+  .result-container { margin-bottom: 15px; }
+  .choice-buttons button { margin-right: 5px; }
+  .selected { background-color: #d0ebff; }
+  #revisionMessage { 
+    background: #fff3cd; 
+    border: 1px solid #ffeeba; 
+    padding: 10px; 
+    margin-bottom: 20px; 
+    border-radius: 5px; 
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Publish or Perish!</h1>
+
+<div id="revisionMessage"></div>
+
+<div id="phase1">
+  <button id="phase1Btn">Get your results</button>
+  <div id="phase1Output" class="output"></div>
+  <button id="submitChoices" style="display:none;">Submit for review</button>
+  <div id="pointsOutput" class="output"></div>
+</div>
+
+<div id="phase2" style="display:none;">
+  <button id="phase2Btn">Get one reviewer</button>
+  <div id="phase2Output" class="output"></div>
+</div>
+
+<button id="refreshBtn" style="display:none;">Refresh</button>
+
+<script>
+const phase1Options = [
+  "No effect found.",
+  "Small positive effect, but very noisy.",
+  "Large effect, but only for a subgroup.",
+  "Strong effect, but disappears if you exclude one outlier.",
+  "Contradictory results across conditions.",
+  "Unexpected correlation.",
+  "Effect only appears after dropping a condition.",
+  "Null results, except for one marginal trend.",
+  "Strong effect, but not in the predicted direction.",
+  "Incomplete data: participant dropout.",
+  "Positive effect, but only in a very small sample.",
+  "Negative effect in one test, positive effect in another.",
+  "Effect appears, but smaller than expected.",
+  "Results depend on analytic choice.",
+  "Messy pattern, no clear story."
+];
+
+const dilemmas = {
+  "No effect found.": "*Hypothesis didn’t pan out*: Report null (IP) vs. Reframe hypothesis post hoc (CP)",
+  "Small positive effect, but very noisy.": "*Journal pressure*: Report cautiously (IP) vs. Spin as strong evidence (CP)",
+  "Large effect, but only for a subgroup.": "*Subgroup effect*: Report cautiously (IP) vs. Generalize to whole sample (CP)",
+  "Strong effect, but disappears if you exclude one outlier.": "*Outlier dilemma*: Keep with explanation (IP) vs. Drop silently (CP)",
+  "Contradictory results across conditions.": "*Messy results*: Report contradictions (IP) vs. Cherry-pick one (CP)",
+  "Unexpected correlation.": "*Correlation dilemma*: Report as exploratory (IP) vs. Present as main finding (CP)",
+  "Effect only appears after dropping a condition.": "*Messy results*: Keep all conditions (IP) vs. Drop condition (CP)",
+  "Null results, except for one marginal trend.": "*Significance hunting*: Report nulls (IP) vs. Highlight marginal trend as 'almost significant' (CP)",
+  "Strong effect, but not in the predicted direction.": "*Hypothesis shift*: Report honestly (IP) vs. Pretend it was predicted (CP)",
+  "Incomplete data: participant dropout.": "*Transparency dilemma*: Report attrition (IP) vs. Hide it (CP)",
+  "Positive effect, but only in a very small sample.": "*Sample size dilemma*: Report cautiously (IP) vs. Present as solid evidence (CP)",
+  "Negative effect in one test, positive effect in another.": "*Messy results*: Report complexity (IP) vs. Highlight only one (CP)",
+  "Effect appears, but smaller than expected.": "*Effect size dilemma*: Report small effect (IP) vs. Omit effect size (CP)",
+  "Results depend on analytic choice.": "*Researcher degrees of freedom*: Report multiple analyses (IP) vs. Pick the 'best-looking' one (CP)",
+  "Messy pattern, no clear story.": "*Narrative dilemma*: Present honestly as inconclusive (IP) vs. 'Massage' story (CP)"
+};
+
+const phase2Reviewers = [
+  { name: "Flashy Reviewer", description: "Accept if CP ≥ IP+2, else Revise.", rule: (IP,CP)=> (CP>=IP+2?"Accept":"Revise") },
+  { name: "Methods Stickler", description: "Accept if IP ≥ CP+2, else Reject.", rule: (IP,CP)=> (IP>=CP+2?"Accept":"Reject") },
+  { name: "Impact Factor Hunter", description: "Accept if CP ≥ 3, else Revise.", rule: (IP,CP)=> (CP>=3?"Accept":"Revise") },
+  { name: "Replication Enthusiast", description: "Accept if IP ≥ CP, else Reject.", rule: (IP,CP)=> (IP>=CP?"Accept":"Reject") },
+  { name: "Lazy Reviewer", description: "Flip a coin: Accept or Reject.", rule: ()=> (Math.random()<0.5?"Accept":"Reject") },
+  { name: "Friendly Reviewer", description: "Always Revise.", rule: ()=> "Revise" },
+  { name: "Overworked Reviewer", description: "Accept if abstract is short/simple; else Reject.", rule: ()=> (Math.random()<0.5?"Accept":"Reject") },
+  { name: "Harsh Reviewer", description: "Always Reject.", rule: ()=> "Reject" },
+  { name: "Cautious Reviewer", description: "Revise if CP = IP, else Accept the higher.", rule: (IP,CP)=> (IP===CP?"Revise":(IP>CP?"Accept":"Accept")) },
+  { name: "Positive Psychology Reviewer", description: "Accept if CP ≥ 1; else Reject.", rule: (IP,CP)=> (CP>=1?"Accept":"Reject") },
+  { name: "Nihilistic Reviewer", description: "Reject unless IP = CP = 0.", rule: (IP,CP)=> (IP===0&&CP===0?"Accept":"Reject") },
+  { name: "Starry-Eyed Reviewer", description: "Accept if results are surprising, else Revise.", rule: ()=> (Math.random()<0.5?"Accept":"Revise") },
+  { name: "Prestige Reviewer", description: "Accept only if IP ≥ 2 and CP ≥ 2, else Revise.", rule: (IP,CP)=> (IP>=2&&CP>=2?"Accept":"Revise") },
+  { name: "Random Reviewer", description: "Roll die: 1–2 Reject, 3–4 Revise, 5–6 Accept.", rule: ()=> { const r=Math.ceil(Math.random()*6); return r<=2?"Reject":r<=4?"Revise":"Accept"; }},
+  { name: "Balanced Reviewer", description: "Accept if |IP – CP| ≤ 1, else Revise.", rule: (IP,CP)=> (Math.abs(IP-CP)<=1?"Accept":"Revise") }
+];
+
+let selectedResults = [];
+let choices = [];
+let dropIndex = null;
+let IPpoints = 0;
+let CPpoints = 0;
+let revisionCount = 0;
+
+function renderPhase1Results() {
+  const html = selectedResults.map((res,i)=>`
+    <div class="result-container" data-index="${i}">
+      <strong>${res}</strong>
+      <div class="dilemma">${dilemmas[res]}</div>
+      <div class="choice-buttons">
+        <button class="choice-btn ${choices[i]==='IP'?'selected':''}" data-index="${i}" data-type="IP">IP</button>
+        <button class="choice-btn ${choices[i]==='CP'?'selected':''}" data-index="${i}" data-type="CP">CP</button>
+        <button class="choice-btn ${choices[i]==='Drop'?'selected':''}" data-index="${i}" data-type="Drop">Drop</button>
+      </div>
+    </div>`).join("");
+  document.getElementById('phase1Output').innerHTML = html;
+}
+
+function makeChoice(index,type) {
+  if(type==="Drop"){
+    if(dropIndex!==null && dropIndex!==index){
+      alert("You can only drop one result at a time!");
+      return;
+    }
+    dropIndex=index;
+  } else {
+    if(dropIndex===index) dropIndex=null;
+  }
+  choices[index]=type;
+  renderPhase1Results();
+  recomputePointsAndDisplay();
+}
+
+function recomputePointsAndDisplay(){
+  IPpoints=0; CPpoints=0;
+  choices.forEach((c,i)=>{
+    if(c==="IP") IPpoints++;
+    else if(c==="CP") CPpoints++;
+    else if(c==="Drop") CPpoints=Math.max(0,CPpoints-1);
+  });
+  document.getElementById('pointsOutput').innerHTML=`<strong>Current Points:</strong><br>IP: ${IPpoints}<br>CP: ${CPpoints}`;
+}
+
+document.getElementById('phase1Btn').addEventListener('click',()=>{
+  const shuffled=[...phase1Options].sort(()=>0.5-Math.random());
+  selectedResults=shuffled.slice(0,3);
+  choices=[null,null,null];
+  dropIndex=null;
+  renderPhase1Results();
+  document.getElementById('submitChoices').style.display='inline-block';
+});
+
+document.getElementById('phase1Output').addEventListener('click',e=>{
+  if(e.target.classList.contains('choice-btn')){
+    makeChoice(parseInt(e.target.dataset.index),e.target.dataset.type);
+  }
+});
+
+document.getElementById('submitChoices').addEventListener('click',()=>{
+  if(choices.includes(null)){alert("Please make a choice for each result!"); return;}
+  document.getElementById('phase1').style.display='none';
+  document.getElementById('phase2').style.display='block';
+  document.getElementById('revisionMessage').style.display='none';
+  document.getElementById('pointsOutput').innerHTML=`<strong>Final Points:</strong><br>IP: ${IPpoints}<br>CP: ${CPpoints}`;
+});
+
+document.getElementById('phase2Btn').addEventListener('click',()=>{
+  const reviewer=phase2Reviewers[Math.floor(Math.random()*phase2Reviewers.length)];
+  const decision=reviewer.rule(IPpoints,CPpoints);
+  const outputDiv=document.getElementById('phase2Output');
+
+  if(decision==="Revise"){
+    revisionCount++;
+    if(revisionCount>=2){
+      outputDiv.innerHTML+=`<div><strong>${reviewer.name}</strong>: Revise → Revision would be a new submission. Paper not accepted.<br><em>Rule:</em> ${reviewer.description}</div>`;
+      document.getElementById('phase2Btn').disabled=true;
+      document.getElementById('refreshBtn').style.display='inline-block';
+      return;
+    }
+    document.getElementById('revisionMessage').innerHTML="The reviewer asked you to revise the paper. You can update your answers, or leave them the same, and submit again. Another reviewer will review your submission.";
+    document.getElementById('revisionMessage').style.display='block';
+    document.getElementById('phase2').style.display='none';
+    document.getElementById('phase1').style.display='block';
+    document.getElementById('submitChoices').style.display='inline-block';
+    renderPhase1Results();
+    recomputePointsAndDisplay();
+  } else {
+    outputDiv.innerHTML+=`<div><strong>${reviewer.name}</strong>: ${decision}<br><em>Rule:</em> ${reviewer.description}</div>`;
+    if(decision==="Accept"||decision==="Reject"){
+      document.getElementById('phase2Btn').disabled=true;
+      document.getElementById('refreshBtn').style.display='inline-block';
+    }
+  }
+});
+
+document.getElementById('refreshBtn').addEventListener('click',()=>location.reload());
+</script>
+
+</body>
+</html>
